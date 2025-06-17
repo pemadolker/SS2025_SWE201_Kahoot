@@ -3,7 +3,6 @@ import { useState } from 'react';
 import Header from '../../components/Header';
 import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
-
 function generatePin() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -115,3 +114,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+

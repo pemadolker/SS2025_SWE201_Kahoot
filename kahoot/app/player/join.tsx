@@ -2,10 +2,12 @@ import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-nativ
 import { useState } from 'react';
 import Header from '../../components/Header';
 import { supabase } from '../../lib/supabase';
+import { useRouter } from 'expo-router';
 
 export default function JoinQuiz() {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleJoin = async () => {
     if (pin.length !== 6) {
@@ -14,14 +16,21 @@ export default function JoinQuiz() {
     }
 
     setLoading(true);
-    const { data, error } = await supabase.from('quizzes').select('title').eq('pin', pin).single();
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('title')
+      .eq('pin', pin)
+      .single();
     setLoading(false);
 
     if (error || !data) {
       Alert.alert('Quiz Not Found', 'No quiz matches the entered PIN');
     } else {
-      Alert.alert('Success', `Joined quiz: "${data.title}"`);
-      // TODO: Redirect to quiz playing screen if implemented
+      // Navigate to waiting room and pass quiz title and pin
+      router.push({
+        pathname: '/player/waiting-room',
+        params: { title: data.title, pin },
+      });
     }
   };
 
