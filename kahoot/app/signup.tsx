@@ -13,14 +13,18 @@ export default function Signup() {
   const handleSignup = async () => {
     setLoading(true);
     setErrorMsg('');
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+
+    const { error } = await supabase.auth.signUp({ email, password });
 
     setLoading(false);
+
     if (error) {
-      setErrorMsg(error.message);
+      // More user-friendly error handling
+      if (error.message.includes('User already registered') || error.message.includes('already exists')) {
+        setErrorMsg('This email is already registered. Please log in or use a different email.');
+      } else {
+        setErrorMsg(error.message); // fallback for unknown errors
+      }
     } else {
       alert('Signup successful! Please check your email to confirm.');
       router.replace('/login');
@@ -47,12 +51,14 @@ export default function Signup() {
         secureTextEntry
         onChangeText={setPassword}
       />
-      {errorMsg ? <Text style={{ color: 'red', marginBottom: 12 }}>{errorMsg}</Text> : null}
+      {errorMsg ? (
+        <Text style={styles.errorText}>{errorMsg}</Text>
+      ) : null}
       <Pressable style={styles.button} onPress={handleSignup} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Signing up...' : 'Sign Up'}</Text>
       </Pressable>
 
-      {/* Add login link below */}
+      {/* Login link */}
       <Text style={styles.loginLink}>
         Already have an account?{' '}
         <Text style={styles.loginLinkBold} onPress={() => router.push('/login')}>
@@ -102,5 +108,10 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '600',
   },
+  errorText: {
+    color: 'red',
+    marginBottom: 12,
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });
-

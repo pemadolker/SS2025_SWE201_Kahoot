@@ -6,18 +6,22 @@ import { router } from 'expo-router';
 export default function Profile() {
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userInitial, setUserInitial] = useState('');
 
-  // Fetch user quizzes
   const fetchQuizzes = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user) {
+      const email = user.email || '';
+      setUserInitial(email.charAt(0).toUpperCase());
+
       const { data, error } = await supabase
-        .from('quizzes')
-        .select('id, title, description')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      .from('quizzes')
+      .select('id, title, description, game_pin') 
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    
 
       if (error) {
         console.error(error.message);
@@ -34,13 +38,11 @@ export default function Profile() {
     fetchQuizzes();
   }, []);
 
-  // Logout handler
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.replace('/');
   };
 
-  // Navigate to create quiz screen
   const handleCreateQuiz = () => {
     router.push('/host/create-quiz');
   };
@@ -62,15 +64,16 @@ export default function Profile() {
 
   return (
     <View style={styles.container}>
-      {/* Top header bar with profile info left, logout right */}
+      {/* Top header bar with profile initial and logout */}
       <View style={styles.headerBar}>
-        <Text style={styles.profileText}>Welcome!</Text>
+        <View style={styles.initialCircle}>
+          <Text style={styles.initialText}>{userInitial}</Text>
+        </View>
         <Pressable onPress={handleLogout} style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutPressed]}>
           <Text style={styles.logoutText}>Logout</Text>
         </Pressable>
       </View>
 
-      {/* Create Quiz button */}
       <Pressable
         style={({ pressed }) => [
           styles.createButton,
@@ -81,7 +84,6 @@ export default function Profile() {
         <Text style={styles.createButtonText}>Create Quiz</Text>
       </Pressable>
 
-      {/* Quiz list or no quiz message */}
       {quizzes.length === 0 ? (
         <Text style={styles.noQuizText}>No quizzes created yet.</Text>
       ) : (
@@ -109,10 +111,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  profileText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#222',
+  initialCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#444',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  initialText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
   },
   logoutButton: {
     backgroundColor: '#cc4444',

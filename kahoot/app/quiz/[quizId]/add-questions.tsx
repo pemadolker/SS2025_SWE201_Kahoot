@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, Alert, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Pressable,
+  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 
@@ -16,81 +26,91 @@ export default function AddQuestions() {
     { text: '', is_correct: false },
   ]);
   const [loading, setLoading] = useState(false);
+  const [submittedQuestions, setSubmittedQuestions] = useState<
+    { question: string; correctAnswer: string }[]
+  >([]);
 
   useEffect(() => {
     const fetchQuiz = async () => {
       if (!quizId) return;
-      const { data, error } = await supabase.from('quizzes').select('title').eq('id', quizId).single();
+
+      const { data, error } = await supabase
+        .from('quizzes')
+        .select('title')
+        .eq('id', quizId)
+        .single();
+
       if (error) {
         Alert.alert('Error', error.message);
+        console.error('Fetch quiz error:', error);
       } else {
         setQuizTitle(data.title);
       }
     };
+
     fetchQuiz();
   }, [quizId]);
 
   const handleAnswerChange = (index: number, value: string) => {
-    const newAnswers = [...answers];
-    newAnswers[index].text = value;
-    setAnswers(newAnswers);
+    const updatedAnswers = [...answers];
+    updatedAnswers[index].text = value;
+    setAnswers(updatedAnswers);
   };
 
   const toggleCorrect = (index: number) => {
-    const newAnswers = answers.map((ans, i) => ({
+    const updatedAnswers = answers.map((ans, i) => ({
       ...ans,
-      is_correct: i === index,
+      is_correct: i === index, // Only one correct
     }));
-    setAnswers(newAnswers);
+    setAnswers(updatedAnswers);
   };
 
   const handleAddQuestion = async () => {
     if (!questionText.trim()) {
-      Alert.alert('Validation Error', 'Question text cannot be empty');
+      Alert.alert('Validation Error', 'Question text cannot be empty.');
       return;
     }
 
     if (answers.some((a) => a.text.trim() === '')) {
-      Alert.alert('Validation Error', 'All answer fields must be filled');
+      Alert.alert('Validation Error', 'All answer fields must be filled.');
       return;
     }
 
     if (!answers.some((a) => a.is_correct)) {
-      Alert.alert('Validation Error', 'Select the correct answer');
+      Alert.alert('Validation Error', 'Please select the correct answer.');
       return;
     }
 
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    // Insert question
-    const { data: questionData, error: questionError } = await supabase
-      .from('questions')
-      .insert([{ quiz_id: quizId, question_text: questionText.trim() }])
-      .select()
-      .single();
+      const { data: questionData, error: questionError } = await supabase
+        .from('questions')
+        .insert([{ quiz_id: quizId, question_text: questionText.trim() }])
+        .select()
+        .single();
 
-    if (questionError) {
-      setLoading(false);
-      Alert.alert('Error', questionError.message);
-      return;
-    }
+      if (questionError) throw questionError;
 
-    // Insert answers
-    const answersToInsert = answers.map((a) => ({
-      question_id: questionData.id,
-      answer_text: a.text.trim(),
-      is_correct: a.is_correct,
-    }));
+      const answersToInsert = answers.map((a) => ({
+        question_id: questionData.id,
+        answer_text: a.text.trim(),
+        is_correct: a.is_correct,
+      }));
 
-    const { error: answersError } = await supabase.from('answers').insert(answersToInsert);
+      const { error: answersError } = await supabase
+        .from('answers')
+        .insert(answersToInsert);
 
-    setLoading(false);
+      if (answersError) throw answersError;
 
-    if (answersError) {
-      Alert.alert('Error', answersError.message);
-    } else {
-      Alert.alert('Success', 'Question and answers added!');
-      // Reset question and answers
+      const correctAnswer = answers.find((a) => a.is_correct)?.text || '';
+
+      setSubmittedQuestions((prev) => [
+        ...prev,
+        { question: questionText.trim(), correctAnswer },
+      ]);
+
       setQuestionText('');
       setAnswers([
         { text: '', is_correct: false },
@@ -98,50 +118,88 @@ export default function AddQuestions() {
         { text: '', is_correct: false },
         { text: '', is_correct: false },
       ]);
+    } catch (err: any) {
+      console.error('Insert error:', err);
+      Alert.alert('Error', err.message || 'Failed to add question.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={styles.title}>Add Questions to "{quizTitle}"</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1 }}
+    >
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+        <Text style={styles.title}>Add Questions to "{quizTitle}"</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Question text"
-        value={questionText}
-        onChangeText={setQuestionText}
-        multiline
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your question here"
+          value={questionText}
+          onChangeText={setQuestionText}
+          multiline
+        />
 
-      {answers.map((ans, idx) => (
-        <View key={idx} style={styles.answerRow}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder={`Answer ${idx + 1}`}
-            value={ans.text}
-            onChangeText={(text) => handleAnswerChange(idx, text)}
-          />
-          <Pressable
-            style={[styles.correctBtn, ans.is_correct ? styles.correctBtnSelected : null]}
-            onPress={() => toggleCorrect(idx)}
-          >
-            <Text style={{ color: 'white', fontWeight: '600' }}>{ans.is_correct ? 'Correct' : 'Mark'}</Text>
-          </Pressable>
-        </View>
-      ))}
+        {answers.map((ans, idx) => (
+          <View key={idx} style={styles.answerRow}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder={`Answer ${idx + 1}`}
+              value={ans.text}
+              onChangeText={(text) => handleAnswerChange(idx, text)}
+            />
+            <Pressable
+              style={[styles.correctBtn, ans.is_correct ? styles.correctBtnSelected : null]}
+              onPress={() => toggleCorrect(idx)}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>
+                {ans.is_correct ? 'Correct' : 'Mark'}
+              </Text>
+            </Pressable>
+          </View>
+        ))}
 
-      <Pressable
-        style={[styles.button, loading && { backgroundColor: '#aaa' }]}
-        onPress={handleAddQuestion}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>{loading ? 'Adding...' : 'Add Question'}</Text>
-      </Pressable>
+        <Pressable
+          style={[styles.button, loading && { backgroundColor: '#aaa' }]}
+          onPress={handleAddQuestion}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>{loading ? 'Adding...' : 'Add Question'}</Text>
+        </Pressable>
 
-      <Pressable style={styles.backBtn} onPress={() => router.push('/profile')}>
-        <Text style={{ color: '#4C5CFF', fontWeight: '600' }}>Back to Profile</Text>
-      </Pressable>
-    </ScrollView>
+        <Pressable style={styles.backBtn} onPress={() => router.push('/profile')}>
+          <Text style={{ color: '#4C5CFF', fontWeight: '600' }}>Back to Profile</Text>
+        </Pressable>
+
+        {submittedQuestions.length > 0 && (
+          <View style={{ marginTop: 24 }}>
+            <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 10 }}>
+              Added Questions:
+            </Text>
+            {submittedQuestions.map((q, idx) => (
+              <View
+                key={idx}
+                style={{
+                  backgroundColor: '#F2F2F2',
+                  padding: 12,
+                  borderRadius: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <Text style={{ fontWeight: '500' }}>
+                  {idx + 1}. {q.question}
+                </Text>
+                <Text style={{ color: '#4C5CFF', marginTop: 4 }}>
+                  Correct: {q.correctAnswer}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -157,7 +215,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#f9f9f9',
   },
-  answerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  answerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   correctBtn: {
     backgroundColor: '#888',
     marginLeft: 8,
